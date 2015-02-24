@@ -31,11 +31,17 @@ import weka.core.Attribute;
 import weka.core.Capabilities;
 import weka.core.Capabilities.Capability;
 import weka.core.Instances;
+import weka.core.Option;
 import weka.core.RevisionUtils;
+import weka.core.Utils;
 
 import java.io.IOException;
+import java.text.SimpleDateFormat;
 import java.util.Arrays;
+import java.util.Date;
+import java.util.Enumeration;
 import java.util.List;
+import java.util.Vector;
 
 /**
  <!-- globalinfo-start -->
@@ -53,6 +59,15 @@ public class NetCDFSaver extends AbstractFileSaver implements BatchConverter {
   /** for serialization. */
   private static final long serialVersionUID = -7446832500561589653L;
 
+  /** the date format string. */
+  public final static String DATE_FORMAT = "yyyy-MM-dd HH:mm:ss.SSS";
+
+  /** whether to save date variables as LONG instead of STRING. */
+  protected boolean m_DateAsLong = false;
+
+  /** the maximum length for strings. */
+  protected int m_MaxLenString = 255;
+
   /**
    * Constructor.
    */
@@ -67,7 +82,10 @@ public class NetCDFSaver extends AbstractFileSaver implements BatchConverter {
    *         explorer/experimenter gui
    */
   public String globalInfo() {
-    return "Writes the data to NetCDF files.";
+    return
+      "Writes the data to NetCDF files.\n"
+      + "Dates are either stored as STRING (format: " + DATE_FORMAT + ") "
+      + "or as LONG (Java epoch, msec since 1970).";
   }
 
   /**
@@ -100,6 +118,135 @@ public class NetCDFSaver extends AbstractFileSaver implements BatchConverter {
       NetCDFLoader.FILE_EXTENSION_NC,
       NetCDFLoader.FILE_EXTENSION_CDF
     };
+  }
+
+  /**
+   * Gets an enumeration describing the available options.
+   *
+   * @return an enumeration of all the available options.
+   */
+  public Enumeration listOptions() {
+    Vector result;
+    Enumeration	enm;
+
+    result = new Vector();
+
+    enm = super.listOptions();
+    while (enm.hasMoreElements())
+      result.add(enm.nextElement());
+
+    result.addElement(new Option(
+        "\tWhether to save date variables as LONG.\n"
+        + "\t(default: no)",
+        "date-as-long", 0, "-date-as-long"));
+
+    result.addElement(new Option(
+        "\tThe maximum length for strings.\n"
+        + "\t(default: 255)",
+        "max-len-string", 1, "-max-len-string <num>"));
+
+    return result.elements();
+  }
+
+  /**
+   * returns the options of the current setup.
+   *
+   * @return		the current options
+   */
+  public String[] getOptions() {
+    Vector<String>	result;
+    String[]		options;
+    int			i;
+
+    result = new Vector<String>();
+
+    options = super.getOptions();
+    for (i = 0; i < options.length; i++)
+      result.add(options[i]);
+
+    if (getDateAsLong())
+      result.add("-date-as-long");
+
+    result.add("-max-len-string");
+    result.add("" + getMaxLenString());
+
+    return result.toArray(new String[result.size()]);
+  }
+
+  /**
+   * Parses the options for this object.
+   *
+   * @param options	the options to use
+   * @throws Exception	if setting of options fails
+   */
+  public void setOptions(String[] options) throws Exception {
+    String	tmpStr;
+
+    setDateAsLong(Utils.getFlag("date-as-long", options));
+
+    tmpStr = Utils.getOption("max-len-string", options);
+    if (tmpStr.length() != 0)
+      setMaxLenString(Integer.parseInt(tmpStr));
+    else
+      setMaxLenString(255);
+
+    super.setOptions(options);
+  }
+
+  /**
+   * Returns the tip text for this property.
+   *
+   * @return 		tip text for this property suitable for
+   * 			displaying in the explorer/experimenter gui
+   */
+  public String dateAsLongTipText() {
+    return "If enabled, dates get saved as LONG instead of STRING.";
+  }
+
+  /**
+   * Get whether to save dates as LONG instead of STRING.
+   *
+   * @return true if saved as LONG.
+   */
+  public boolean getDateAsLong() {
+    return m_DateAsLong;
+  }
+
+  /**
+   * Set whether to save dates as LONG instead of STRING.
+   *
+   * @param value true if saved as LONG.
+   */
+  public void setDateAsLong(boolean value) {
+    m_DateAsLong = value;
+  }
+
+  /**
+   * Returns the tip text for this property.
+   *
+   * @return 		tip text for this property suitable for
+   * 			displaying in the explorer/experimenter gui
+   */
+  public String maxTipText() {
+    return "The maximum.";
+  }
+
+  /**
+   * Get the maximum length for strings.
+   *
+   * @return the maximum lengt.
+   */
+  public int getMaxLenString() {
+    return m_MaxLenString;
+  }
+
+  /**
+   * Set the maximum length for strings.
+   *
+   * @param value the maximum length.
+   */
+  public void setMaxLenString(int value) {
+    m_MaxLenString = value;
   }
 
   /**
@@ -170,9 +317,16 @@ public class NetCDFSaver extends AbstractFileSaver implements BatchConverter {
 	    var[i] = writer.addVariable(null, att.name(), DataType.DOUBLE, dims);
 	    break;
 	  case Attribute.DATE:
-	    dim = writer.addUnlimitedDimension(att.name());
-	    dims = Arrays.asList(new Dimension[]{dim});
-	    var[i] = writer.addVariable(null, att.name(), DataType.LONG, dims);
+	    if (m_DateAsLong) {
+	      dim = writer.addUnlimitedDimension(att.name());
+	      dims = Arrays.asList(new Dimension[]{dim});
+	      var[i] = writer.addVariable(null, att.name(), DataType.LONG, dims);
+	    }
+	    else {
+	      dim = writer.addUnlimitedDimension(att.name());
+	      dims = Arrays.asList(new Dimension[]{dim});
+	      var[i] = writer.addStringVariable(null, att.name(), dims, DATE_FORMAT.length());
+	    }
 	    break;
 	  case Attribute.NOMINAL:
 	    dim = writer.addUnlimitedDimension(att.name());
@@ -185,7 +339,7 @@ public class NetCDFSaver extends AbstractFileSaver implements BatchConverter {
 	  case Attribute.STRING:
 	    dim = writer.addUnlimitedDimension(att.name());
 	    dims = Arrays.asList(new Dimension[]{dim});
-	    var[i] = writer.addStringVariable(null, att.name(), dims, 255);  // TODO option for max length
+	    var[i] = writer.addStringVariable(null, att.name(), dims, m_MaxLenString);
 	    break;
 	  default:
 	    throw new IllegalStateException("Unhandled attribute type: " + Attribute.typeToString(att.type()));
@@ -195,6 +349,8 @@ public class NetCDFSaver extends AbstractFileSaver implements BatchConverter {
 
       // add data
       Array array;
+      ArrayString arrayStr;
+      SimpleDateFormat df = new SimpleDateFormat(DATE_FORMAT);
       for (int i = 0; i < data.numAttributes(); i++) {
 	Attribute att = data.attribute(i);
 	switch (att.type()) {
@@ -205,14 +361,24 @@ public class NetCDFSaver extends AbstractFileSaver implements BatchConverter {
 	    writer.write(var[i], array);
 	    break;
 	  case Attribute.DATE:
-	    array = Array.factory(DataType.LONG, new int[]{data.numInstances()});
-	    for (int n = 0; n < data.numInstances(); n++)
-	      array.setLong(n, (long) data.instance(n).value(i));
-	    writer.write(var[i], array);
+	    if (m_DateAsLong) {
+	      array = Array.factory(DataType.LONG, new int[]{data.numInstances()});
+	      for (int n = 0; n < data.numInstances(); n++)
+		array.setLong(n, (long) data.instance(n).value(i));
+	      writer.write(var[i], array);
+	    }
+	    else {
+	      arrayStr = new ArrayString(new int[]{data.numInstances()});
+	      for (int n = 0; n < data.numInstances(); n++) {
+		Date date = new Date((long) data.instance(n).value(i));
+		arrayStr.setObject(n, df.format(date));
+	      }
+	      writer.write(var[i], arrayStr);
+	    }
 	    break;
 	  case Attribute.NOMINAL:
 	  case Attribute.STRING:
-	    ArrayString arrayStr = new ArrayString(new int[]{data.numInstances()});
+	    arrayStr = new ArrayString(new int[]{data.numInstances()});
 	    for (int n = 0; n < data.numInstances(); n++)
 	      arrayStr.setObject(n, data.instance(n).stringValue(i));
 	    writer.write(var[i], arrayStr);
