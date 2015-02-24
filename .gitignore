@@ -1,6 +1,39 @@
+# general
+build/
+/build/
+dist/
+/dist/
+doc/
 target/
-pom.xml.tag
-pom.xml.releaseBackup
-pom.xml.versionsBackup
-pom.xml.next
-release.properties
+/target/
+.texlipse
+.classpath
+/.classpath
+.project
+/.project
+.settings/
+/.settings/
+.externalToolBuilders
+/.externalToolBuilders/
+
+# IntelliJ
+*.iml
+.idea
+
+syntax: glob
+
+# tmp files
+*.swp
+*.backup
+*~
+
+# for latex
+*.aux
+*.bbl
+*.blg
+*.brf
+*.log
+*.out
+*.synctex.gz
+*.thm
+*.toc
