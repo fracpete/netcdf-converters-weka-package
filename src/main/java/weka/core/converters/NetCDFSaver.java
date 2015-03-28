@@ -22,8 +22,9 @@
 package weka.core.converters;
 
 import ucar.ma2.Array;
-import ucar.ma2.ArrayString;
+import ucar.ma2.ArrayChar;
 import ucar.ma2.DataType;
+import ucar.ma2.Index;
 import ucar.nc2.Dimension;
 import ucar.nc2.NetcdfFileWriter;
 import ucar.nc2.Variable;
@@ -333,7 +334,7 @@ public class NetCDFSaver extends AbstractFileSaver implements BatchConverter {
 	    dims = Arrays.asList(new Dimension[]{dim});
 	    int maxLen = 0;
 	    for (int n = 0; n < att.numValues(); n++)
-	      maxLen = Math.max(maxLen, att.value(i).length());
+	      maxLen = Math.max(maxLen, att.value(n).length());
 	    var[i] = writer.addStringVariable(null, att.name(), dims, maxLen);
 	    break;
 	  case Attribute.STRING:
@@ -349,7 +350,8 @@ public class NetCDFSaver extends AbstractFileSaver implements BatchConverter {
 
       // add data
       Array array;
-      ArrayString arrayStr;
+      ArrayChar arrayChar;
+      Index ima;
       SimpleDateFormat df = new SimpleDateFormat(DATE_FORMAT);
       for (int i = 0; i < data.numAttributes(); i++) {
 	Attribute att = data.attribute(i);
@@ -368,20 +370,22 @@ public class NetCDFSaver extends AbstractFileSaver implements BatchConverter {
 	      writer.write(var[i], array);
 	    }
 	    else {
-	      arrayStr = new ArrayString(new int[]{data.numInstances()});
-	      for (int n = 0; n < data.numInstances(); n++) {
-		Date date = new Date((long) data.instance(n).value(i));
-		arrayStr.setObject(n, df.format(date));
-	      }
-	      writer.write(var[i], arrayStr);
-	    }
+              arrayChar = new ArrayChar.D2(data.numInstances(), 0);
+              ima = arrayChar.getIndex();
+              for (int n = 0; n < data.numInstances(); n++) {
+                Date date = new Date((long) data.instance(n).value(i));
+                arrayChar.setString(ima.set(n), df.format(date));
+              }
+              writer.write(var[i], arrayChar);
+            }
 	    break;
 	  case Attribute.NOMINAL:
 	  case Attribute.STRING:
-	    arrayStr = new ArrayString(new int[]{data.numInstances()});
+	    arrayChar = new ArrayChar.D2(data.numInstances(), 0);
+            ima = arrayChar.getIndex();
 	    for (int n = 0; n < data.numInstances(); n++)
-	      arrayStr.setObject(n, data.instance(n).stringValue(i));
-	    writer.write(var[i], arrayStr);
+	      arrayChar.setString(ima.set(n), data.instance(n).stringValue(i));
+            writer.write(var[i], arrayChar);
 	    break;
 	  default:
 	    throw new IllegalStateException("Unhandled attribute type: " + Attribute.typeToString(att.type()));
