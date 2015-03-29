@@ -23,9 +23,9 @@ package weka.core.converters;
 
 import ucar.ma2.Array;
 import ucar.ma2.ArrayChar;
+import ucar.ma2.ArrayDouble;
 import ucar.ma2.DataType;
 import ucar.ma2.Index;
-import ucar.nc2.Dimension;
 import ucar.nc2.NetcdfFileWriter;
 import ucar.nc2.Variable;
 import weka.core.Attribute;
@@ -39,10 +39,8 @@ import weka.core.Utils;
 
 import java.io.IOException;
 import java.text.SimpleDateFormat;
-import java.util.Arrays;
 import java.util.Date;
 import java.util.Enumeration;
-import java.util.List;
 import java.util.Vector;
 
 /**
@@ -331,41 +329,40 @@ public class NetCDFSaver extends AbstractFileSaver implements BatchConverter {
 
       // create header
       Variable var[] = new Variable[data.numAttributes()];
-      Dimension dim;
-      List<Dimension> dims;
+      int[] maxLengths = new int[data.numAttributes()];
+      // generic string length dimension/var
+      writer.addDimension(null, "str_len", m_MaxLenString);
+      writer.addVariable(null, "str", DataType.CHAR, "str_len");
+      writer.addDimension(null, "num_instances", data.numInstances());
       for (int i = 0; i < data.numAttributes(); i++) {
 	Attribute att = data.attribute(i);
         String name = makeValidName(att.name());
+        maxLengths[i] = -1;
 	switch (att.type()) {
-	  case Attribute.NUMERIC:
-	    dim = writer.addUnlimitedDimension(name);
-	    dims = Arrays.asList(new Dimension[]{dim});
-	    var[i] = writer.addVariable(null, name, DataType.DOUBLE, dims);
+          case Attribute.NUMERIC:
+	    var[i] = writer.addVariable(null, name, DataType.DOUBLE, "num_instances");
 	    break;
 	  case Attribute.DATE:
 	    if (m_DateAsLong) {
-	      dim = writer.addUnlimitedDimension(name);
-	      dims = Arrays.asList(new Dimension[]{dim});
-	      var[i] = writer.addVariable(null, name, DataType.LONG, dims);
-	    }
+	      var[i] = writer.addVariable(null, name, DataType.LONG, "num_instances");
+            }
 	    else {
-	      dim = writer.addUnlimitedDimension(name);
-	      dims = Arrays.asList(new Dimension[]{dim});
-	      var[i] = writer.addStringVariable(null, name, dims, DATE_FORMAT.length());
+              writer.addDimension(null, name + "_len", DATE_FORMAT.length());
+              var[i] = writer.addVariable(null, name, DataType.CHAR, "num_instances" + " " + name + "_len");
+              maxLengths[i] = DATE_FORMAT.length();
 	    }
 	    break;
 	  case Attribute.NOMINAL:
-	    dim = writer.addUnlimitedDimension(name);
-	    dims = Arrays.asList(new Dimension[]{dim});
 	    int maxLen = 0;
 	    for (int n = 0; n < att.numValues(); n++)
 	      maxLen = Math.max(maxLen, att.value(n).length());
-	    var[i] = writer.addStringVariable(null, name, dims, maxLen);
+            writer.addDimension(null, name + "_len", maxLen);
+            var[i] = writer.addVariable(null, name, DataType.CHAR, "num_instances" + " " + name + "_len");
+            maxLengths[i] = maxLen;
 	    break;
 	  case Attribute.STRING:
-	    dim = writer.addUnlimitedDimension(name);
-	    dims = Arrays.asList(new Dimension[]{dim});
-	    var[i] = writer.addStringVariable(null, name, dims, m_MaxLenString);
+	    var[i] = writer.addVariable(null, name, DataType.CHAR, "num_instances" + " str_len");
+            maxLengths[i] = m_MaxLenString;
 	    break;
 	  default:
 	    throw new IllegalStateException("Unhandled attribute type: " + Attribute.typeToString(att.type()));
@@ -376,13 +373,14 @@ public class NetCDFSaver extends AbstractFileSaver implements BatchConverter {
       // add data
       Array array;
       ArrayChar arrayChar;
-      Index ima;
+      Index index;
       SimpleDateFormat df = new SimpleDateFormat(DATE_FORMAT);
       for (int i = 0; i < data.numAttributes(); i++) {
 	Attribute att = data.attribute(i);
+        int[] shape = var[i].getShape();
 	switch (att.type()) {
 	  case Attribute.NUMERIC:
-	    array = Array.factory(DataType.DOUBLE, new int[]{data.numInstances()});
+	    array = Array.factory(DataType.DOUBLE, new int[]{shape[0]});
 	    for (int n = 0; n < data.numInstances(); n++) {
               Instance inst = data.instance(n);
               if (inst.isMissing(i))
@@ -394,7 +392,7 @@ public class NetCDFSaver extends AbstractFileSaver implements BatchConverter {
 	    break;
 	  case Attribute.DATE:
 	    if (m_DateAsLong) {
-	      array = Array.factory(DataType.LONG, new int[]{data.numInstances()});
+	      array = Array.factory(DataType.LONG, new int[]{shape[0]});
 	      for (int n = 0; n < data.numInstances(); n++) {
                 Instance inst = data.instance(n);
                 if (inst.isMissing(i))
@@ -405,29 +403,29 @@ public class NetCDFSaver extends AbstractFileSaver implements BatchConverter {
 	      writer.write(var[i], array);
 	    }
 	    else {
-              arrayChar = new ArrayChar.D2(data.numInstances(), 0);
-              ima = arrayChar.getIndex();
+              arrayChar = new ArrayChar.D2(shape[0], shape[1]);
+              index = arrayChar.getIndex();
               for (int n = 0; n < data.numInstances(); n++) {
                 Instance inst = data.instance(n);
                 Date date = new Date((long) inst.value(i));
                 if (inst.isMissing(i))
-                  arrayChar.setString(ima.set(n), "?");
+                  arrayChar.setString(index.set(n), "?");
                 else
-                  arrayChar.setString(ima.set(n), df.format(date));
+                  arrayChar.setString(index.set(n), df.format(date));
               }
               writer.write(var[i], arrayChar);
             }
 	    break;
 	  case Attribute.NOMINAL:
 	  case Attribute.STRING:
-	    arrayChar = new ArrayChar.D2(data.numInstances(), 0);
-            ima = arrayChar.getIndex();
+	    arrayChar = new ArrayChar.D2(shape[0], shape[1]);
+            index = arrayChar.getIndex();
 	    for (int n = 0; n < data.numInstances(); n++) {
               Instance inst = data.instance(n);
               if (inst.isMissing(i))
-                arrayChar.setString(ima.set(n), "?");
+                arrayChar.setString(index.set(n), "?");
               else
-                arrayChar.setString(ima.set(n), inst.stringValue(i));
+                arrayChar.setString(index.set(n), inst.stringValue(i));
             }
             writer.write(var[i], arrayChar);
 	    break;
