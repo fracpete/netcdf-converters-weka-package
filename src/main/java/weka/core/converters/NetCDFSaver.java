@@ -362,7 +362,7 @@ public class NetCDFSaver extends AbstractFileSaver implements BatchConverter {
       writer.addDimension(null, "num_instances", data.numInstances());
       for (int i = 0; i < data.numAttributes(); i++) {
 	Attribute att = data.attribute(i);
-        String name = makeValidName(att.name());
+        String name = makeValidName("att:" + att.name());
         maxLengths[i] = -1;
 	switch (att.type()) {
           case Attribute.NUMERIC:
