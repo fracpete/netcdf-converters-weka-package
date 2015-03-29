@@ -23,7 +23,6 @@ package weka.core.converters;
 
 import ucar.ma2.Array;
 import ucar.ma2.ArrayChar;
-import ucar.ma2.ArrayDouble;
 import ucar.ma2.DataType;
 import ucar.ma2.Index;
 import ucar.nc2.NetcdfFileWriter;
@@ -45,9 +44,32 @@ import java.util.Vector;
 
 /**
  <!-- globalinfo-start -->
+ * Writes the data to NetCDF files.<br/>
+ * Dates are either stored as STRING (format: yyyy-MM-dd HH:mm:ss.SSS) or as LONG (Java epoch, msec since 1970).<br/>
+ * Uses '?' for missing values in strings and NaN for numeric values.<br/>
+ * For more information see:<br/>
+ * http://www.unidata.ucar.edu/software/netcdf/<br/>
+ * http://www.unidata.ucar.edu/software/thredds/current/netcdf-java/tutorial/
+ * <p/>
  <!-- globalinfo-end -->
  * 
  <!-- options-start -->
+ * Valid options are: <p/>
+ * 
+ * <pre> -i &lt;the input file&gt;
+ *  The input file</pre>
+ * 
+ * <pre> -o &lt;the output file&gt;
+ *  The output file</pre>
+ * 
+ * <pre> -date-as-long
+ *  Whether to save date variables as LONG.
+ *  (default: no)</pre>
+ * 
+ * <pre> -max-len-string &lt;num&gt;
+ *  The maximum length for strings.
+ *  (default: 255)</pre>
+ * 
  <!-- options-end -->
  *
  * @author FracPete (fracpete at waikato dot ac dot nz)
@@ -84,9 +106,13 @@ public class NetCDFSaver extends AbstractFileSaver implements BatchConverter {
   public String globalInfo() {
     return
       "Writes the data to NetCDF files.\n"
-      + "Dates are either stored as STRING (format: " + DATE_FORMAT + ") "
-      + "or as LONG (Java epoch, msec since 1970).\n"
-      + "Uses '?' for missing values in strings and NaN for numeric values.";
+        + "Dates are either stored as STRING (format: " + DATE_FORMAT + ") "
+        + "or as LONG (Java epoch, msec since 1970).\n"
+        + "Uses '?' for missing values in strings and NaN for numeric values."
+        + "\n"
+        + "For more information see:\n"
+        + "http://www.unidata.ucar.edu/software/netcdf/\n"
+        + "http://www.unidata.ucar.edu/software/thredds/current/netcdf-java/tutorial/";
   }
 
   /**
